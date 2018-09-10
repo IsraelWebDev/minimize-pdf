@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+
+Parameters:
+
+  BucketName:
+    Type: String
+  InputPrefix:
+    Type: String
+    Default: pdfs/
+  InputSuffix:
+    Type: String
+    Default: pdf
+  OutputPrefix:
+    Type: String
+    Default: images/
+  OutputType:
+    Type: String
+    Default: png
+    AllowedValues:
+      - png
+
+Resources: 
+
+  InputBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: LambdaPermission
+    Properties:
+      BucketName: !Ref BucketName 
+      NotificationConfiguration:
+        LambdaConfigurations:
+        - Event: 's3:ObjectCreated:*'
+          Function: !GetAtt LambdaFunction.Arn
+          Filter:
+            S3Key:
+              Rules:
+                -
+                  Name: suffix
+                  Value: !Ref InputSuffix
+                - 
+                  Name: prefix
+                  Value: !Ref InputPrefix
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref LambdaFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:aws:s3:::${BucketName}"
+
+  LambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyName: Lambda
+      Roles:
+        - !Ref LambdaRole
+      PolicyDocument: 
+        Version: 2012-10-17
+        Statement: 
+          - 
+            Effect: Allow
+            Action: 
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - 
+            Effect: Allow
+            Action: 
+                - s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${BucketName}/${InputPrefix}*${InputSuffix}"
+          - 
+            Effect: Allow
+            Action: 
+                - s3:PutObject
+                - s3:PutObjectAcl
+            Resource: !Sub "arn:aws:s3:::${BucketName}/${OutputPrefix}*"
+
+  LambdaRole: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement: 
+          - 
+            Effect: Allow
+            Principal: 
+              Service: 
+                - lambda.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      Path: "/"
+                
+  LambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs6.10
+      CodeUri: ./lambda
+      Timeout: 10
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          PREFIX: !Ref OutputPrefix
+          TYPE: !Ref OutputType
+
