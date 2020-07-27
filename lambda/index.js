@@ -41,16 +41,23 @@ exports.handler = function(event, context, callback) {
             });
         },
 
-        function convertToPng(inputFilename, next) {
-            console.log('Converting ' + inputBucket + '/' + inputKey);
+        function minimizePdf(inputFilename, next) {
+            console.log('Minimizing ' + inputBucket + '/' + inputKey);
 
             var outputFilename = "/tmp/output";
 
             gs().batch()
             .nopause()
-            .option('-r600') // DPI
+            .option('-r150') // DPI
+            .option('-dNoOutputFonts') 
+            .option('-dColorImageResolution=150') 
+            .option('-dGrayImageResolution=150') 
+            .option('-dMonoImageResolution=150') 
+            .option('-dDownsampleColorImages=true') 
+            .option('-dDownsampleGrayImages=true')
+            .option('-dDownsampleMonoImages=true') 
             .executablePath('./bin/./gs')
-            .device('png16m') // to PNG
+            .device(outputType=='png'?'png16m':'pdfwrite') // to PNG/PDF
             .output(outputFilename)
             .input(inputFilename)
             .exec(function (err, stdout, stderr) {
@@ -70,15 +77,15 @@ exports.handler = function(event, context, callback) {
 
         function uploadImage(data, next) {
 
-            var inputBasename = inputKey.replace(/\\/g,'/').replace(/.*\//, '').split('.')[0];  
-            var outputKey = outputPrefix + inputBasename + ".png"
+            //var inputBasename = inputKey.replace(/\\/g,'/').replace(/.*\//, '').split('.')[0];  
+            var outputKey = outputPrefix + inputKey;
 
             console.log('Uploading ' + inputBucket + '/' + outputKey);
             // Upload the image to S3 and make publicly accessible
             s3.putObject({ Bucket: inputBucket,
                            Key: outputKey, 
                            Body: data,
-                           ContentType: "image/png"
+                           ContentType: (outputType=='png'?'image/png':'application/pdf')
                          }, function(err, response) {
                 if (err) {
                     next(err);
