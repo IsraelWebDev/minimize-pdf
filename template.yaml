@@ -17,8 +17,9 @@ Parameters:
     Default: images/
   OutputType:
     Type: String
-    Default: png
+    Default: pdf
     AllowedValues:
+      - pdf
       - png
 
 Resources: 
