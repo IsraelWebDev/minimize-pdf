@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "async": "^2.6.1",
-    "gs": "https://github.com/sina-masnadi/node-gs/tarball/master"
+    "gs": "https://github.com/sina-masnadi/node-gs/tarball/master",
+    "lambda-ghostscript": "github:sina-masnadi/lambda-ghostscript"
   }
 }
