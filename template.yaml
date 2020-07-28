@@ -4,17 +4,19 @@ Transform: AWS::Serverless-2016-10-31
 
 Parameters:
 
-  BucketName:
+  InputBucketName:
+    Type: String
+  OutputBucketName:
     Type: String
   InputPrefix:
     Type: String
-    Default: pdfs/
+    Default: 
   InputSuffix:
     Type: String
     Default: pdf
   OutputPrefix:
     Type: String
-    Default: images/
+    Default: 
   OutputType:
     Type: String
     Default: pdf
@@ -28,7 +30,7 @@ Resources:
     Type: AWS::S3::Bucket
     DependsOn: LambdaPermission
     Properties:
-      BucketName: !Ref BucketName 
+      BucketName: !Ref InputBucketName 
       NotificationConfiguration:
         LambdaConfigurations:
         - Event: 's3:ObjectCreated:*'
@@ -50,7 +52,7 @@ Resources:
       FunctionName: !Ref LambdaFunction
       Principal: s3.amazonaws.com
       SourceAccount: !Ref "AWS::AccountId"
-      SourceArn: !Sub "arn:aws:s3:::${BucketName}"
+      SourceArn: !Sub "arn:aws:s3:::${InputBucketName}"
 
   LambdaPolicy:
     Type: AWS::IAM::Policy
@@ -72,13 +74,13 @@ Resources:
             Effect: Allow
             Action: 
                 - s3:GetObject
-            Resource: !Sub "arn:aws:s3:::${BucketName}/${InputPrefix}*${InputSuffix}"
+            Resource: !Sub "arn:aws:s3:::${InputBucketName}/${InputPrefix}*${InputSuffix}"
           - 
             Effect: Allow
             Action: 
                 - s3:PutObject
                 - s3:PutObjectAcl
-            Resource: !Sub "arn:aws:s3:::${BucketName}/${OutputPrefix}*"
+            Resource: !Sub "arn:aws:s3:::${OutputBucketName}/${OutputPrefix}*"
 
   LambdaRole: 
     Type: AWS::IAM::Role
