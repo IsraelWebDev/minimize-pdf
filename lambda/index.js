@@ -5,7 +5,8 @@ var gs = require('gs');
 var fs = require('fs');
 
 var outputPrefix = process.env.PREFIX;
-var outputType = process.env.TYPE
+var outputType = process.env.TYPE;
+var outputBucket = process.env.DESTINATION;
 
 var s3 = new AWS.S3();
  
@@ -14,6 +15,9 @@ exports.handler = function(event, context, callback) {
     console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
 
     var inputBucket = event.Records[0].s3.bucket.name;
+    if(inputBucket == outputBucket)
+        console.log('Beware of infinite loops when triggering and writing to the same bucket. See https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html');
+ 
     // Object key may have spaces or unicode non-ASCII characters.
     var inputKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
 
@@ -80,9 +84,9 @@ exports.handler = function(event, context, callback) {
             //var inputBasename = inputKey.replace(/\\/g,'/').replace(/.*\//, '').split('.')[0];  
             var outputKey = outputPrefix + inputKey;
 
-            console.log('Uploading ' + inputBucket + '/' + outputKey);
+            console.log('Uploading ' + outputBucket + '/' + outputKey);
             // Upload the image to S3 and make publicly accessible
-            s3.putObject({ Bucket: inputBucket,
+            s3.putObject({ Bucket: outputBucket,
                            Key: outputKey, 
                            Body: data,
                            ContentType: (outputType=='png'?'image/png':'application/pdf')
