@@ -111,4 +111,5 @@ Resources:
         Variables:
           PREFIX: !Ref OutputPrefix
           TYPE: !Ref OutputType
+          DESTINATION: !Ref OutputBucketName
 
