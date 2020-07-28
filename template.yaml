@@ -10,13 +10,13 @@ Parameters:
     Type: String
   InputPrefix:
     Type: String
-    Default: 
+    Default: ''
   InputSuffix:
     Type: String
     Default: pdf
   OutputPrefix:
     Type: String
-    Default: 
+    Default: ''
   OutputType:
     Type: String
     Default: pdf
