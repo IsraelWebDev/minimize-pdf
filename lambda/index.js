@@ -60,7 +60,7 @@ exports.handler = function(event, context, callback) {
             .option('-dDownsampleColorImages=true') 
             .option('-dDownsampleGrayImages=true')
             .option('-dDownsampleMonoImages=true') 
-            .executablePath('./bin/./gs')
+            .executablePath('node_modules/lambda-ghostscript/bin/./gs')
             .device(outputType=='png'?'png16m':'pdfwrite') // to PNG/PDF
             .output(outputFilename)
             .input(inputFilename)
