@@ -54,6 +54,7 @@ exports.handler = function(event, context, callback) {
             .nopause()
             .option('-r150') // DPI
             .option('-dNoOutputFonts') 
+            .option('-dCompatibilityLevel=1.4') 
             .option('-dColorImageResolution=150') 
             .option('-dGrayImageResolution=150') 
             .option('-dMonoImageResolution=150') 
