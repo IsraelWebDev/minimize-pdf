@@ -66,16 +66,28 @@ exports.handler = function(event, context, callback) {
             .output(outputFilename)
             .input(inputFilename)
             .exec(function (err, stdout, stderr) {
-                if (!err) {
-                    fs.readFile(outputFilename, function (err, data) {
-                        if (err) { 
-                            next(err); 
+                if (err) {
+                    next(err);
+                } else {
+                    fs.stat(outputFilename, function (err, stats) {
+                        if (err) {
+                            next(err);
                         } else {
-                            next(null, data);
+                            // Check if the output file size is less than 4KB
+                            if (stats.size <= 4096) {
+                                next(new Error("PDF may be password protected"));
+                            } else {
+                                console.log('Output file size: ' + stats.size);
+                                fs.readFile(outputFilename, function (err, data) {
+                                    if (err) { 
+                                        next(err); 
+                                    } else {
+                                        next(null, data);
+                                    }
+                                });
+                            }
                         }
                     });
-                } else {
-                    next(err)
                 }
             });
         },
