@@ -3,6 +3,6 @@
     "async": "^2.6.1",
     "aws-sdk": "^2.1692.0",
     "gs": "https://github.com/sina-masnadi/node-gs/tarball/master",
-    "lambda-ghostscript": "https://github.com/sina-masnadi/lambda-ghostscript.git"
+    "lambda-ghostscript": "github:viilu/lambda-ghostscript"
   }
 }
