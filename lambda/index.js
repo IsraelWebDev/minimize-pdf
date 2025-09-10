@@ -1,129 +1,105 @@
-var async = require('async');
-var util = require('util');
-var AWS = require('aws-sdk');
-var gs = require('gs');            
-var fs = require('fs');
+const util = require('util');
+const AWS = require('aws-sdk');
+const gs = require('gs');
+const fs = require('fs').promises;
 
-var outputPrefix = process.env.PREFIX;
-var outputType = process.env.TYPE;
-var outputBucket = process.env.DESTINATION;
+const outputPrefix = process.env.PREFIX;
+const outputType = process.env.TYPE;
+const outputBucket = process.env.DESTINATION;
 
-var s3 = new AWS.S3();
- 
-exports.handler = function(event, context, callback) {
+const s3 = new AWS.S3();
 
-    console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
+async function downloadPdf(inputBucket, inputKey) {
+    console.log('Downloading ' + inputBucket + '/' + inputKey);
 
-    var inputBucket = event.Records[0].s3.bucket.name;
-    if(inputBucket == outputBucket)
-        console.log('Beware of infinite loops when triggering and writing to the same bucket. See https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html');
- 
-    // Object key may have spaces or unicode non-ASCII characters.
-    var inputKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
+    const data = await s3.getObject({ Bucket: inputBucket, Key: inputKey }).promise();
+    const outputFilename = '/tmp/input';
+    await fs.writeFile(outputFilename, data.Body);
+    return outputFilename;
+}
 
-    async.waterfall([
+async function minimizePdf(inputFilename, inputBucket, inputKey) {
+    console.log('Minimizing ' + inputBucket + '/' + inputKey);
 
-        function downloadPdf(next) {
-            console.log('Downloading ' + inputBucket + '/' + inputKey);
+    const outputFilename = '/tmp/output';
 
-            // Download the PDF locally for conversio
-            s3.getObject({ Bucket: inputBucket,
-                           Key: inputKey
-                         }, function(err, data) {  
-                if (err) {
-                    next(err);   
-                } else {
-                    var outputFilename = "/tmp/input";
-                    fs.writeFile(outputFilename, data.Body, function(err) {
-                        if(err) {
-                            next(err);
-                        } else {
-                            next(null, outputFilename);
-                        }
-                    }); 
-                }
-            });
-        },
+    // Get input file size
+    const inputStats = await fs.stat(inputFilename);
+    const inputSize = inputStats.size;
+    console.log(`Input file size: ${inputSize} bytes`);
 
-        function minimizePdf(inputFilename, next) {
-            console.log('Minimizing ' + inputBucket + '/' + inputKey);
-
-            var outputFilename = "/tmp/output";
-
-            gs().batch()
+    // Wrap the gs batch call in a Promise
+    return new Promise((resolve, reject) => {
+        gs().batch()
             .nopause()
-            .option('-r150') // DPI
-            .option('-dNoOutputFonts') 
-            .option('-dCompatibilityLevel=1.4') 
-            .option('-dColorImageResolution=150') 
-            .option('-dGrayImageResolution=150') 
-            .option('-dMonoImageResolution=150') 
-            .option('-dDownsampleColorImages=true') 
+            .option('-r150')
+            .option('-dNoOutputFonts')
+            .option('-dCompatibilityLevel=1.4')
+            .option('-dColorImageResolution=150')
+            .option('-dGrayImageResolution=150')
+            .option('-dMonoImageResolution=150')
+            .option('-dDownsampleColorImages=true')
             .option('-dDownsampleGrayImages=true')
-            .option('-dDownsampleMonoImages=true') 
+            .option('-dDownsampleMonoImages=true')
             .executablePath('node_modules/lambda-ghostscript/bin/./gs')
-            .device(outputType=='png'?'png16m':'pdfwrite') // to PNG/PDF
+            .device(outputType === 'png' ? 'png16m' : 'pdfwrite')
             .output(outputFilename)
             .input(inputFilename)
-            .exec(function (err, stdout, stderr) {
-                if (err) {
-                    next(err);
-                } else {
-                    fs.stat(outputFilename, function (err, stats) {
-                        if (err) {
-                            next(err);
-                        } else {
-                            // Check if the output file size is less than 4KB
-                            if (stats.size <= 4096) {
-                                next(new Error("PDF may be password protected"));
-                            } else {
-                                console.log('Output file size: ' + stats.size);
-                                fs.readFile(outputFilename, function (err, data) {
-                                    if (err) { 
-                                        next(err); 
-                                    } else {
-                                        next(null, data);
-                                    }
-                                });
-                            }
-                        }
-                    });
+            .exec(async (err) => {
+                if (err) return reject(err);
+
+                try {
+                    const stats = await fs.stat(outputFilename);
+                    const outputSize = stats.size;
+
+                    if (outputSize <= 4096) {
+                        return reject(new Error('PDF may be password protected'));
+                    }
+
+                    console.log(`Output file size: ${outputSize} bytes`);
+                    console.log(`Size difference: ${outputSize - inputSize} bytes (${((outputSize - inputSize) / inputSize * 100).toFixed(2)}%)`);
+
+                    const data = await fs.readFile(outputFilename);
+                    resolve(data);
+                } catch (err) {
+                    reject(err);
                 }
             });
-        },
+    });
+}
 
-        function uploadImage(data, next) {
+async function uploadImage(data, inputKey) {
+    const outputKey = outputPrefix + inputKey;
+    console.log('Uploading ' + outputBucket + '/' + outputKey);
 
-            //var inputBasename = inputKey.replace(/\\/g,'/').replace(/.*\//, '').split('.')[0];  
-            var outputKey = outputPrefix + inputKey;
+    await s3.putObject({
+        Bucket: outputBucket,
+        Key: outputKey,
+        Body: data,
+        ContentType: outputType === 'png' ? 'image/png' : 'application/pdf',
+    }).promise();
+}
 
-            console.log('Uploading ' + outputBucket + '/' + outputKey);
-            // Upload the image to S3 and make publicly accessible
-            s3.putObject({ Bucket: outputBucket,
-                           Key: outputKey, 
-                           Body: data,
-                           ContentType: (outputType=='png'?'image/png':'application/pdf')
-                         }, function(err, response) {
-                if (err) {
-                    next(err);
-                } else {
-                    next(null);
-                }
-            });
-        }], 
+exports.handler = async (event) => {
+    try {
+        console.log("Reading options from event:\n", util.inspect(event, { depth: 5 }));
 
-        function (err) {
-            if (err) {
-                console.error(
-                    'Unable to process ' + inputBucket + '/' + inputKey +
-                    ' due to an error: ' + err
-                );
-            } else {
-                console.log(
-                    'Successfully processed ' + inputBucket + '/' + inputKey 
-                );
-            }
-            callback(null, "message");
+        const inputBucket = event.Records[0].s3.bucket.name;
+        if (inputBucket === outputBucket) {
+            console.log('Beware of infinite loops when triggering and writing to the same bucket.');
         }
-    );
+
+        const inputKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
+
+        const inputFilename = await downloadPdf(inputBucket, inputKey);
+        const data = await minimizePdf(inputFilename, inputBucket, inputKey);
+        await uploadImage(data, inputKey);
+
+        console.log('Successfully processed ' + inputBucket + '/' + inputKey);
+        return { message: 'Success' };
+    } catch (err) {
+        console.error('Unable to process event:', err);
+        throw err; // Lambda will mark this invocation as failed
+    }
 };
+

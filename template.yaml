@@ -101,7 +101,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs22.x
       CodeUri: ./lambda
       Role: !GetAtt LambdaRole.Arn
       Timeout: 300
